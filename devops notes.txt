@@ -1,0 +1,240 @@
+# After enter into the server we have to execute below command
+sudo apt update -y
+mkdir scripts
+cd scripts
+vi jenkins.sh
+
+# To install jenkins
+sudo wget -O /usr/share/keyrings/jenkins-keyring.asc \
+    https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc]" \
+    https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+    /etc/apt/sources.list.d/jenkins.list > /dev/null
+sudo apt-get update
+  sudo apt-get install fontconfig openjdk-17-jre
+  sudo apt-get install jenkins -y
+
+sudo chmod +x jenkins.sh   --> execution permission
+sh jenkins.sh   --> To execute the script
+jenkins --version
+java --version
+
+
+
+# Complete the above step you will create docker.sh file using below commands
+vi docker.sh
+# docker script
+
+# Add Docker's official GPG key:
+sudo apt-get update
+sudo apt-get install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add the repository to Apt sources:
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
+sudo chmod 666 /var/run/docker.sock
+
+sudo chmod +x docker.sh   --> execution permission
+sh docker.sh   --> To execute the script
+docker --version
+docker info
+
+
+# # Complete the above step you will create maven.sh file using below commands
+vi maven.sh
+# maven script
+sudo apt update
+sudo apt install maven -y
+mvn -version
+
+sudo chmod +x maven.sh   --> execution permission
+sh maven.sh   --> To execute the script
+mvn --version
+
+installed jdk eclipse plugins in jenkins
+docker,docker pipeline
+sonarscanner
+restart
+
+
+
+
+# Install SonarQube using below commands [You may install SonarQube using commands or docker image]
+sudo su -
+apt install unzip
+adduser sonarqube
+sudo su - sonarqube
+wget https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-9.4.0.54424.zip
+unzip sonarqube-9.4.0.54424.zip
+chmod -R 755 /home/sonarqube/sonarqube-9.4.0.54424
+chown -R sonarqube:sonarqube /home/sonarqube/sonarqube-9.4.0.54424
+cd sonarqube-9.4.0.54424/bin/linux-x86-64/
+./sonar.sh start
+
+
+after installing sonarquebue we have to create token
+click on adminstrator,security,genrate token
+
+Go to credentials,click on global,add credentials,in kind select secret text next in passwd paste token give id name anything 
+
+Go to tools install java maven sonarquebue docker
+JDK-17,install automatically
+maven ,,
+sonar-scanner,,
+docker,,
+
+Go to system configuration global security ,go to sonarquebue installation
+give sonar-install 
+give sonar url
+select token
+
+
+
+
+
+
+
+Pipeline to create docker image
+pipeline {
+    agent any
+    
+    environment {
+        SCANNER_HOME= tool 'sonar- scanner'
+    }
+
+    stages {
+       
+        stage('GetCode') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Nisarga2608/swiggy-nodejs-devops-project.git'
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                sh "docker build -t nishu ."
+            }
+        }
+        
+        stage ("SonarQube") {
+            steps {
+                withSonarQubeEnv('sonar-install') {
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Campground \
+                    -Dsonar.projectKey=Campground '''
+                }
+            }
+        }
+    }
+}
+it will create one docker image then delete that docker image
+then next step is to create docker container using below pipeline
+
+creating container
+pipeline {
+    agent any
+    
+    environment {
+        SCANNER_HOME= tool 'sonar- scanner'
+    }
+
+    stages {
+       
+        stage('GetCode') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Nisarga2608/swiggy-nodejs-devops-project.git'
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                sh "docker build -t nishu ."
+            }
+        }
+        
+        stage ("SonarQube") {
+            steps {
+                withSonarQubeEnv('sonar-install') {
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Campground \
+                    -Dsonar.projectKey=Campground '''
+                }
+            }
+        }
+        
+        stage('container') {
+            steps {
+                sh "docker run -itd --name harshu -p 3002:3000 nishu" 
+            }
+        }
+    }
+}
+
+then you can see docker iamge and docker conatiner by executing docker ps
+
+Go to credentials,click global,add credential,give dockerhub username and passwd,give some thing in id
+
+
+
+Pushing image to dockerhub follow below pipeline
+pipeline {
+    agent any
+    
+    environment {
+        DOCKERHUB_CREDENTIALS = credentials('Docker_id')
+        DOCKER_IMAGE = "harshunishu/nishu-cicd:${BUILD_NUMBER}"
+        SCANNER_HOME= tool 'sonar- scanner'
+    }
+
+    stages {
+       
+        stage('GetCode') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Nisarga2608/swiggy-nodejs-devops-project.git'
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                sh "docker build -t ${DOCKER_IMAGE} ."
+            }
+        }
+        
+        stage ("SonarQube") {
+            steps {
+                withSonarQubeEnv('sonar-install') {
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Campground \
+                    -Dsonar.projectKey=Campground '''
+                }
+            }
+        }
+        
+        stage('Login') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'Docker_id', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
+                }
+            }
+        }
+
+        stage('Push') {
+            steps {
+                script {
+                    def dockerImage = docker.image(DOCKER_IMAGE)
+                    dockerImage.push() // Pushes the Docker image to the repository
+                }
+            }
+        }
+        
+        stage('container') {
+            steps {
+                sh "docker run -itd --name harshu3 -p 3004:3000 ${DOCKER_IMAGE}" 
+            }
+        }
+    }
+}
